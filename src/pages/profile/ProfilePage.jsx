@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { profileApi } from '../../api'
 import { 
-  User, 
   MapPin, 
   Briefcase, 
   Award, 
@@ -15,7 +14,6 @@ import {
   Phone,
   Mail,
   Edit,
-  Star,
   Building
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -28,34 +26,37 @@ export default function ProfilePage() {
   const [experiences, setExperiences] = useState([])
   const [education, setEducation] = useState([])
 
-  useEffect(() => {
-    loadProfile()
-  }, [])
+  const isEmployer = user?.user_type === 'employer'
 
-  const loadProfile = async () => {
-    try {
-      setLoading(true)
-      const data = await profileApi.getProfile('me')
-      setProfile(data)
-      
-      // Load related data
-      if (data.id) {
-        const [skillsData, expData, eduData] = await Promise.all([
-          profileApi.getProfileSkills(data.id).catch(() => []),
-          profileApi.getExperiences(data.id).catch(() => []),
-          profileApi.getEducation(data.id).catch(() => [])
-        ])
-        setSkills(skillsData)
-        setExperiences(expData)
-        setEducation(eduData)
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        setLoading(true)
+        const data = await profileApi.getProfile('me')
+        setProfile(data)
+        
+        // Only load skills, experiences, education for job seekers (not employers)
+        if (!isEmployer && data.id) {
+          const [skillsData, expData, eduData] = await Promise.all([
+            profileApi.getProfileSkills(data.id).catch(() => []),
+            profileApi.getExperiences(data.id).catch(() => []),
+            profileApi.getEducation(data.id).catch(() => [])
+          ])
+          // Handle paginated or array responses
+          setSkills(Array.isArray(skillsData) ? skillsData : skillsData?.results || [])
+          setExperiences(Array.isArray(expData) ? expData : expData?.results || [])
+          setEducation(Array.isArray(eduData) ? eduData : eduData?.results || [])
+        }
+      } catch (error) {
+        console.error('Failed to load profile:', error)
+        toast.error('Failed to load profile')
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('Failed to load profile:', error)
-      toast.error('Failed to load profile')
-    } finally {
-      setLoading(false)
     }
-  }
+    
+    loadProfile()
+  }, [isEmployer])
 
   if (loading) {
     return (
@@ -67,8 +68,6 @@ export default function ProfilePage() {
       </div>
     )
   }
-
-  const isEmployer = user?.user_type === 'employer'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 py-8">
@@ -180,38 +179,86 @@ export default function ProfilePage() {
 
         {/* Main Content Grid */}
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left Column - Skills & Info */}
+          {/* Left Column - Skills & Info (Job Seekers) or Company Info (Employers) */}
           <div className="lg:col-span-1 space-y-6">
-            {/* Skills */}
-            <div className="card glass-effect p-6 animate-fade-in" style={{animationDelay: '0.1s'}}>
-              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                <Award className="h-5 w-5 mr-2 text-primary-600" />
-                Skills
-              </h2>
-              {skills.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {skills.map((skillItem) => (
-                    <span 
-                      key={skillItem.id}
-                      className="px-4 py-2 bg-gradient-to-r from-primary-500 to-blue-600 text-white rounded-full text-sm font-medium shadow-md hover:shadow-lg transition-shadow"
-                    >
-                      {skillItem.skill?.name || skillItem.name}
-                      {skillItem.level && (
-                        <span className="ml-2 opacity-75">• {skillItem.level}</span>
-                      )}
-                    </span>
-                  ))}
+            {/* Skills - Only for Job Seekers */}
+            {!isEmployer && (
+              <div className="card glass-effect p-6 animate-fade-in" style={{animationDelay: '0.1s'}}>
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                  <Award className="h-5 w-5 mr-2 text-primary-600" />
+                  Skills
+                </h2>
+                {skills.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {skills.map((skillItem) => (
+                      <span 
+                        key={skillItem.id}
+                        className="px-4 py-2 bg-gradient-to-r from-primary-500 to-blue-600 text-white rounded-full text-sm font-medium shadow-md hover:shadow-lg transition-shadow"
+                      >
+                        {skillItem.skill?.name || skillItem.name}
+                        {skillItem.level && (
+                          <span className="ml-2 opacity-75">* {skillItem.level}</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">No skills added yet</p>
+                )}
+                <Link 
+                  to="/profile/edit" 
+                  className="block mt-4 text-primary-600 hover:text-primary-700 font-medium text-sm text-center"
+                >
+                  + Add Skills
+                </Link>
+              </div>
+            )}
+
+            {/* Company Details - Only for Employers */}
+            {isEmployer && (
+              <div className="card glass-effect p-6 animate-fade-in" style={{animationDelay: '0.1s'}}>
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                  <Building className="h-5 w-5 mr-2 text-primary-600" />
+                  Company Details
+                </h2>
+                <div className="space-y-3">
+                  {profile?.company_name && (
+                    <div>
+                      <span className="text-sm text-gray-500">Company Name</span>
+                      <p className="font-medium text-gray-900">{profile.company_name}</p>
+                    </div>
+                  )}
+                  {profile?.company_size && (
+                    <div>
+                      <span className="text-sm text-gray-500">Company Size</span>
+                      <p className="font-medium text-gray-900">{profile.company_size} employees</p>
+                    </div>
+                  )}
+                  {profile?.company_website && (
+                    <div>
+                      <span className="text-sm text-gray-500">Website</span>
+                      <a 
+                        href={profile.company_website} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="block font-medium text-primary-600 hover:text-primary-700 truncate"
+                      >
+                        {profile.company_website}
+                      </a>
+                    </div>
+                  )}
+                  {!profile?.company_name && !profile?.company_size && (
+                    <p className="text-gray-500 text-sm">No company details added yet</p>
+                  )}
                 </div>
-              ) : (
-                <p className="text-gray-500 text-sm">No skills added yet</p>
-              )}
-              <Link 
-                to="/profile/edit" 
-                className="block mt-4 text-primary-600 hover:text-primary-700 font-medium text-sm text-center"
-              >
-                + Add Skills
-              </Link>
-            </div>
+                <Link 
+                  to="/profile/edit" 
+                  className="block mt-4 text-primary-600 hover:text-primary-700 font-medium text-sm text-center"
+                >
+                  Update Company Info
+                </Link>
+              </div>
+            )}
 
             {/* Status */}
             <div className="card glass-effect p-6 animate-fade-in" style={{animationDelay: '0.2s'}}>
@@ -235,13 +282,125 @@ export default function ProfilePage() {
                     </span>
                   </div>
                 )}
+                {isEmployer && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Account Type</span>
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                      Employer
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* Quick Actions for Employers */}
+            {isEmployer && (
+              <div className="card glass-effect p-6 animate-fade-in" style={{animationDelay: '0.3s'}}>
+                <h3 className="font-semibold text-gray-900 mb-3">Quick Actions</h3>
+                <div className="space-y-2">
+                  <Link 
+                    to="/employer/jobs/new"
+                    className="block w-full btn-primary py-2 text-center rounded-lg"
+                  >
+                    Post a New Job
+                  </Link>
+                  <Link 
+                    to="/employer/jobs"
+                    className="block w-full btn-secondary py-2 text-center rounded-lg"
+                  >
+                    Manage My Jobs
+                  </Link>
+                  <Link 
+                    to="/employer/candidates"
+                    className="block w-full btn-secondary py-2 text-center rounded-lg"
+                  >
+                    View Candidates
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Right Column - Experience & Education */}
+          {/* Right Column - Experience & Education (Job Seekers) or About (Employers) */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Experience */}
+            {/* Employer - About Company Section */}
+            {isEmployer && (
+              <div className="card glass-effect p-6 animate-fade-in" style={{animationDelay: '0.2s'}}>
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                  <Building className="h-5 w-5 mr-2 text-primary-600" />
+                  About {profile?.company_name || 'Your Company'}
+                </h2>
+                {profile?.bio ? (
+                  <p className="text-gray-700 leading-relaxed">{profile.bio}</p>
+                ) : (
+                  <div className="text-center py-8">
+                    <Building className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500">No company description added yet</p>
+                    <Link 
+                      to="/profile/edit" 
+                      className="inline-block mt-3 text-primary-600 hover:text-primary-700 font-medium text-sm"
+                    >
+                      + Add Company Description
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Employer - Contact Information */}
+            {isEmployer && (
+              <div className="card glass-effect p-6 animate-fade-in" style={{animationDelay: '0.3s'}}>
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                  <Mail className="h-5 w-5 mr-2 text-primary-600" />
+                  Contact Information
+                </h2>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <Mail className="h-5 w-5 text-gray-500" />
+                    <div>
+                      <span className="text-xs text-gray-500 block">Email</span>
+                      <span className="font-medium text-gray-900">{user?.email}</span>
+                    </div>
+                  </div>
+                  {profile?.phone && (
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <Phone className="h-5 w-5 text-gray-500" />
+                      <div>
+                        <span className="text-xs text-gray-500 block">Phone</span>
+                        <span className="font-medium text-gray-900">{profile.phone}</span>
+                      </div>
+                    </div>
+                  )}
+                  {profile?.location && (
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <MapPin className="h-5 w-5 text-gray-500" />
+                      <div>
+                        <span className="text-xs text-gray-500 block">Location</span>
+                        <span className="font-medium text-gray-900">{profile.location}</span>
+                      </div>
+                    </div>
+                  )}
+                  {profile?.website && (
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <Link2 className="h-5 w-5 text-gray-500" />
+                      <div>
+                        <span className="text-xs text-gray-500 block">Website</span>
+                        <a 
+                          href={profile.website} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="font-medium text-primary-600 hover:text-primary-700"
+                        >
+                          {profile.website}
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Experience - Job Seekers Only */}
             {!isEmployer && (
               <div className="card glass-effect p-6 animate-fade-in" style={{animationDelay: '0.2s'}}>
                 <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">

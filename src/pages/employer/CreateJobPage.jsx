@@ -50,6 +50,7 @@ export default function CreateJobPage() {
       setLoading(true)
       const jobData = {
         ...formData,
+        status: 'active', // Set job as active so it's visible to job seekers
         salary_min: formData.salary_min ? parseInt(formData.salary_min) : null,
         salary_max: formData.salary_max ? parseInt(formData.salary_max) : null,
         skills_required: formData.skills_required.split(',').map(s => s.trim()).filter(Boolean)
